@@ -179,9 +179,9 @@ namespace TSX {
                             // if the system recommends not to retry
                             // go to the fallback immediately
                             goto fallback_lock; 
-                        }
-                            
-
+                        } else {
+                            _stats.tx_aborts_per_reason[TX_ABORT_REST]++;
+                        }   
                         break;
 
                     default:
