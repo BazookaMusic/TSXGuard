@@ -181,15 +181,14 @@ namespace TSX {
             return max_retries - nretries;
         }
 
-        // abort_to_retry: aborts current transaction.
+        // abort: aborts current transaction.
         // Takes the error code as a template
         // parameter.
         template <unsigned char imm>
-        void abort() {
+        static void abort() {
             static_assert(imm > USER_OPTION_LOWER_BOUND, 
             "User aborts should be larger than USER_OPTION_LOWER_BOUND, as lower numbers are reserved");
             _xabort(imm);
-            user_explicitly_aborted = true;
         }
 
 
@@ -278,9 +277,28 @@ namespace TSX {
                 has_locked = true;
                 spin_lock.lock();
         }
-
-        int getRemainingRetries() const {
+        // abort_to_retry: aborts current transaction
+        // and returns retries left
+        // in order to retry transaction.
+        // Takes the error code as a template
+        // parameter.
+        template <unsigned char imm>
+        int abort_to_retry() {
+            static_assert(imm > USER_OPTION_LOWER_BOUND, 
+            "User aborts should be larger than USER_OPTION_LOWER_BOUND, as lower numbers are reserved");
+            _xabort(imm);
+            user_explicitly_aborted = true;
             return max_retries - nretries;
+        }
+
+        // abort: aborts current transaction.
+        // Takes the error code as a template
+        // parameter.
+        template <unsigned char imm>
+        static void abort() {
+            static_assert(imm > USER_OPTION_LOWER_BOUND, 
+            "User aborts should be larger than USER_OPTION_LOWER_BOUND, as lower numbers are reserved");
+            _xabort(imm);
         }
 
         ~TSXGuardWithStats() {
