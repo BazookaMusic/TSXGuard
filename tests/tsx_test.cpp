@@ -6,9 +6,12 @@
 #include <thread>
 #include <vector>
 
+
 #include "../include/catch.hpp"
 
 #include "../include/TSXGuard.hpp"
+
+#include "../include/rtm.h"
 
 static const int THREADS = 4;
 
@@ -65,27 +68,28 @@ TEST_CASE("SpinLockTest TEST", "[lock]") {
 
 
 void transactional_increment(bool &noEntryFlag, int *data, TSX::SpinLock &spin_lock, TSX::TSXStats &stats) {
-    TSX::TSXGuard guard(20,spin_lock,stats);
+    unsigned char status = 0;
+    TSX::TSXGuardWithStats guard(20,spin_lock,status,stats);
     
-    
-    (void)noEntryFlag;
-    //noEntryFlag = true;
+    noEntryFlag = true;
 
     for (int i = 0; i < 1000000; i++) {
         i = i | 0;
     }
 
-    if (!noEntryFlag) {
+    if (noEntryFlag) {
         for (int i = 0; i < THREADS; i++) {
             data[i]++;
         }
     }
 
+    noEntryFlag = false;
     
 }
 
 
 TEST_CASE("TSX RTM TEST", "[tsx]") {
+    std::cout << "Testing RTM Implementation" << std::endl;
     TSX::SpinLock spin_lock;
 
     int counter[THREADS];
@@ -104,7 +108,7 @@ TEST_CASE("TSX RTM TEST", "[tsx]") {
         noEntryFlag = false;
 
         for (int i = 0; i < THREADS; i++) {
-            threads[i % THREADS] = std::thread(transactional_increment, std::ref(noEntryFlag), 
+            threads[i] = std::thread(transactional_increment, std::ref(noEntryFlag), 
             std::ref(counter), std::ref(spin_lock), std::ref(stats[i]));
         }
 
@@ -124,7 +128,45 @@ TEST_CASE("TSX RTM TEST", "[tsx]") {
 
     }
 
+    std::cout << "Displaying Statistics:" << std::endl;
     TSX::total_stats(stats).print_stats();
+}
+
+bool transactional_abort(TSX::SpinLock &spin_lock) {
+     std::cout << "Testing RTM Abort Implementation" << std::endl;
+    unsigned char status = 0;
+    while(status != 3) {
+        status = 0; 
+        TSX::TSXGuard guard(20,spin_lock, status);
+
+        guard.abort<3>();
+    }
+
+    if (status != 3) {
+        std::cerr << "Failed simple abort. Status not updated!" << std::endl;
+        return false;
+    }
+
+    status = 0;
+    int retries = 20;
+    while(1) {
+        TSX::TSXGuard guard(retries,spin_lock, status);
+        if (retries > 0) {
+            retries = guard.abort_to_retry<3>();
+        } else {
+            break;
+        }
+    }
+
+    return status == 3;
+
+    
+    
+}
+
+TEST_CASE("TSX RTM ABORT TEST", "[tsx]") {
+    TSX::SpinLock spin_lock;
+    REQUIRE(transactional_abort(spin_lock));
 }
 
 
